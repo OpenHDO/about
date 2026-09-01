@@ -20,14 +20,14 @@ contracts belong in the repository that owns them.
 
 | Repository | Responsibility |
 | --- | --- |
-| [server](https://github.com/OpenHDO/server) | Python control plane backend/runtime/API, persistence, orchestration, CLI, and built-in React web admin surface |
+| [server](https://github.com/OpenHDO/server) | Python control plane backend/runtime/API, persistence boundary, orchestration, CLI, and built-in React web admin surface |
 | [server-dashboard](https://github.com/OpenHDO/server-dashboard) | Reusable React web-panel module for many dashboard instances |
 | [server-logic](https://github.com/OpenHDO/server-logic) | Flows, nodes, conditions, and actions |
 | [server-linker](https://github.com/OpenHDO/server-linker) | Python server-side Linker sessions, inventory, health, and routing |
 | [linker](https://github.com/OpenHDO/linker) | Standalone Python Linker with vendor-specific connections and device logic |
 | [agent](https://github.com/OpenHDO/agent) | Desktop and edge operating-system capabilities |
 | [sdk](https://github.com/OpenHDO/sdk) | Generated bindings, Python SDK tooling, and optional C++/native integration SDKs |
-| [app](https://github.com/OpenHDO/app) | Native and specialized client applications |
+| [app](https://github.com/OpenHDO/app) | React browser and specialized client applications |
 | [get-started](https://github.com/OpenHDO/get-started) | Installation, first run, and contributor onboarding |
 
 ## Ownership and authority
@@ -39,14 +39,14 @@ repository's contract or vocabulary.
 | Repository | Owns | Does not own |
 | --- | --- | --- |
 | `about` | Product overview, system boundaries, shared vocabulary, ADR process, and cross-repo governance | Runtime code, database schema, or wire-format implementation |
-| `server` | Python backend/runtime/API; canonical server API and Linker protocol schemas under `contracts/<major>/`; server state, policy, persistence, orchestration, module hosting, and the built-in React web admin surface | Device-driver code, reusable client-dashboard behavior, or generated SDK bindings |
+| `server` | Python backend/runtime/API; canonical server API and Linker protocol schemas under `contracts/<major>/`; server state, policy, persistence boundary, orchestration, module hosting, and the built-in React web admin surface | Device-driver code, reusable client-dashboard behavior, or generated SDK bindings |
 | `server-dashboard` | Reusable React web-panel module behavior, instance-safe presentation, and its client-facing interaction contract | The built-in server admin surface, canonical server state, or a particular dashboard instance |
 | `server-logic` | Flow, node, condition, and action behavior | Transport, device access, or direct database access |
 | `server-linker` | Python server-side Linker sessions, inventory, health, and routing implementation | The standalone Linker process or vendor-specific device logic |
 | `linker` | Standalone Python hardware access, vendor-specific connections, discovery, pairing, credentials, and device logic | Canonical server state or policy |
 | `agent` | Desktop and edge operating-system capabilities and their permissions | Hardware ownership or server persistence |
 | `sdk` | Generated language bindings, Python SDK tooling, optional C++/native integration SDKs, and compatibility helpers derived from published contracts | The normative wire schemas or the server runtime |
-| `app` | Native and specialized client applications | Server orchestration or canonical data |
+| `app` | React browser and specialized client applications | Server orchestration or canonical data |
 | `get-started` | Installation, first-run, and contributor onboarding | Product or protocol authority |
 
 When ownership is unclear, [ARCHITECTURE.md](ARCHITECTURE.md) is the starting
@@ -88,12 +88,30 @@ The first end-to-end path uses one real vendor-specific RGB light over Wi-Fi:
 - `server-linker` is the Python server-side Linker session, registration,
   health, inventory, routing, and result-mapping boundary.
 - `linker` is a Python process that owns the vendor-specific connection and
-  device logic for the real light.
+  device logic for the real light. Its current path includes the native,
+  Tuya-compatible local driver.
 - `server-dashboard`, the built-in admin surface, and any other web panels are
   React clients of the server API; neither web panels nor `app` owns canonical
   state or vendor details.
 
 The complete path is recorded in [ADR-0001](docs/ADR/0001-rgb-light-vertical-slice.md).
+
+## Current foundation and roadmap
+
+The current server foundation is a Python runtime with an in-memory,
+process-local repository and bounded transient event fan-out. State and event
+delivery are not durable across a process restart. The active HTTP/WebSocket
+surface and optional bearer-token authorization are implemented; broader
+identity, operations, and audit capabilities remain roadmap work.
+
+SQLite persistence, durable history/replay/retry, and stronger delivery
+guarantees are future server work. They are architectural ownership and
+technology direction, not promises made by the current in-memory runtime.
+
+The real-device vertical slice uses the native Tuya-compatible path in
+`linker`. Device inspection tooling may be developed in parallel, but vendor
+details remain confined to the Linker and do not create a simulator or Home
+Assistant runtime.
 
 ## Dashboard instances and server admin
 
@@ -148,7 +166,7 @@ include `OpenHDO` where the word could be confused with a compiler linker.
 ## Technology direction
 
 - Python 3.11+ for the server backend/runtime/API and Linker;
-- SQLite for the first single-node persistence backend;
+- SQLite as the future first single-node persistence backend;
 - HTTP and WebSocket for client and live-update APIs;
 - JSON Schema and versioned language-neutral messages at process boundaries;
 - React + TypeScript + Tailwind + shadcn-style primitives for every web panel;
@@ -179,8 +197,10 @@ Linker, with vendor-specific details isolated at its driver edge.
 ## Status
 
 The [server](https://github.com/OpenHDO/server) repository contains the current
-Python backend/runtime/API foundation, protocol v1 schemas, a React panel shell,
-Python SDK tooling, and CI. The runtime decision is recorded in
+Python backend/runtime/API foundation, protocol v1 schemas, a built-in React
+admin panel, Python SDK tooling, and CI. Its current repository is
+process-local; SQLite persistence, durable delivery, and expanded auth/ops are
+future work. The runtime decision is recorded in
 [ADR-0002](docs/ADR/0002-python-server-react-panels.md). The next end-to-end
-milestone is the real RGB Wi-Fi path with one authenticated Python Linker
-session.
+target is the real RGB Wi-Fi path with one authenticated Python Linker
+session; inspection tooling may proceed in parallel.

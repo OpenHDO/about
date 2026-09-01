@@ -11,8 +11,10 @@ current runtime and web-panel decision is recorded in
 OpenHDO is a local-first control plane with explicit process boundaries:
 
 - **Server** is the primary Python backend/runtime/API. It owns canonical state,
-  orchestration, policy, persistence, audit, the public API, server modules, and
-  its built-in React configuration/admin surface.
+  orchestration, policy, the persistence and audit boundaries, the public API,
+  server modules, and its built-in React configuration/admin surface. The
+  current foundation uses an in-memory, process-local repository; durable
+  persistence and audit are future implementations of those boundaries.
 - **Linker** is a standalone Python process close to hardware. It owns
   vendor-specific connections and device logic: transports, discovery, pairing,
   local credentials, protocol drivers, and device events.
@@ -73,14 +75,14 @@ tests, and release notes of that responsibility.
 | Repository | Canonical responsibility | Boundary rule |
 | --- | --- | --- |
 | `about` | Product vocabulary, repository map, architecture, ADR process, and cross-repo governance | Documents decisions; owns no runtime state or wire schema. |
-| `server` | Python backend/runtime/API; Linker protocol schemas in `contracts/<major>/`, canonical state, policy, persistence, orchestration, and built-in React web admin surface | Publishes normative schemas and compatibility decisions; does not own reusable client-dashboard instances or vendor-specific device logic. |
+| `server` | Python backend/runtime/API; Linker protocol schemas in `contracts/<major>/`, canonical state, policy, persistence boundary, orchestration, and built-in React web admin surface | Publishes normative schemas and compatibility decisions; does not own reusable client-dashboard instances or vendor-specific device logic. |
 | `server-dashboard` | Reusable React web-panel module, instance-safe presentation, and client-facing interaction contract | Does not own the built-in server admin surface, canonical state, or a particular dashboard instance. |
 | `server-logic` | Flows, nodes, conditions, and actions | Requests server capabilities; never writes the database directly. |
 | `server-linker` | Python server-side Linker sessions, inventory, health, and routing | Implements the server side of the Linker contract; does not own vendor-specific device logic. |
 | `linker` | Standalone Python hardware access process, vendor-specific connections, discovery, pairing, credentials, and device logic | Implements device access behind the Linker contract; does not own canonical state or policy. |
 | `agent` | Desktop and edge OS capabilities | Uses a separate identity and explicit permissions. |
 | `sdk` | Generated bindings, Python SDK tooling, and optional native integration SDKs (including C++) | Derives from published schemas; cannot redefine them or become the runtime. |
-| `app` | Native and specialized clients | Consumes public contracts; does not duplicate orchestration. |
+| `app` | React browser and specialized clients | Consumes public contracts; does not duplicate orchestration. |
 | `get-started` | Installation and onboarding | Documents released behavior; does not define it. |
 
 The owner reviews changes to its responsibility and supplies compatibility
@@ -97,8 +99,8 @@ happened; `Command` → a validated request; `Flow` → triggers, conditions, an
 actions; `Location` → a physical or logical place; `Linker` → a hardware-access
 process; `Session` → its authenticated server connection.
 
-These concepts are serialized independently of any dashboard layout or SQLite
-schema.
+These concepts are serialized independently of any dashboard layout or future
+SQLite schema.
 
 ## Protocol vocabulary
 
@@ -145,8 +147,8 @@ panels.
 
 ## Communication
 
-The Python server API is planned as HTTP for queries, configuration, and
-commands, plus WebSocket for live state, events, logs, and execution updates.
+The Python server API uses HTTP for queries, configuration, and commands, plus
+WebSocket for live state, events, logs, and execution updates.
 Process boundaries use small versioned JSON messages. The logical v1 envelope
 is defined in the [server contracts](https://github.com/OpenHDO/server/tree/master/contracts/v1);
 the concrete transport remains a deployment decision.
@@ -155,6 +157,24 @@ Every remote boundary must provide authentication, encryption, bounded message
 sizes, timeouts, structured errors, and reconnect behavior. Protocol major
 versions are negotiated before payload processing. Unknown optional fields may
 be ignored; breaking required changes require a new major contract.
+
+## Current foundation and roadmap
+
+The current server foundation is a Python runtime with an in-memory,
+process-local repository and bounded transient event fan-out. State and event
+delivery are not durable across a process restart. The active HTTP/WebSocket
+surface and bearer-token authorization boundary are implemented; broader
+identity, operations, and audit capabilities remain roadmap work.
+
+SQLite persistence, durable history/replay/retry, and stronger delivery
+guarantees are future server work. The pattern catalog below records the rules
+for those future capabilities; it does not turn them into guarantees of the
+current runtime.
+
+The current real-device path is the native Tuya-compatible driver in `linker`.
+Device inspection tooling may be developed in parallel without changing the
+server/Linker ownership boundary. Simulator and Home Assistant runtimes remain
+out of scope.
 
 ### Boundary minimum
 
@@ -286,7 +306,7 @@ A Linker registration identifies its version, location, transports, health,
 and capabilities. The server turns the reported device inventory into its
 canonical registry and routes commands back through the owning session.
 
-## Reference vertical slice: RGB light
+## Current vertical slice: RGB light
 
 The first end-to-end proof is one real vendor-specific RGB light over Wi-Fi,
 recorded in [ADR-0001](docs/ADR/0001-rgb-light-vertical-slice.md):
@@ -298,14 +318,17 @@ recorded in [ADR-0001](docs/ADR/0001-rgb-light-vertical-slice.md):
    protocol negotiation, registration, health, inventory, routing, and result
    mapping.
 3. `linker` is a Python process that owns the vendor-specific connection and
-   device logic, translating the vendor protocol at the driver edge.
-4. `server-dashboard`, the built-in admin surface, and any other web panels are
-   React clients. `app` is another client surface. They consume the abstract
+   device logic, translating the vendor protocol at the driver edge. The
+   current Linker path includes a native Tuya-compatible local driver.
+4. `server-dashboard`, the built-in admin surface, and `app` are React clients.
+   They consume the abstract
    server API and neither owns canonical device state or vendor details.
 
-The slice is complete when the server admin surface, one dashboard instance,
-and one app can observe and command the real Wi-Fi light through the same
-server-linker boundary.
+The slice target is complete when the server admin surface, one dashboard
+instance, and one app can observe and command the real Wi-Fi light through the
+same server-linker boundary. The current documentation does not imply that
+SQLite durability, durable delivery, or the broader auth/ops roadmap is already
+part of that slice.
 
 ## Security model
 
@@ -332,13 +355,16 @@ deliberately outside the first deployment target.
 
 ## Delivery sequence
 
-1. Python server foundation, contracts, logging, registry, and in-memory execution.
-2. Python HTTP/WebSocket API, SQLite migrations, authentication baseline, and history.
-3. Python Linker process, one vendor-specific Wi-Fi driver, identity, heartbeat,
-   and reconnect.
-4. React web panels plus Logic and server-Linker modules.
-5. Python SDKs, optional C++/native integrations, agents, additional clients,
-   and more integrations.
+1. Current foundation: Python server runtime, contracts, logging, registry,
+   process-local in-memory execution, and the built-in React admin panel.
+2. Current vertical-slice work: server-side Linker boundary, reusable React
+   dashboard module, React app, and the real native Tuya-compatible Linker path.
+3. Future server persistence: SQLite migrations, durable history, replay, and
+   recovery semantics.
+4. Future reliability and operations: durable delivery, broader authentication,
+   authorization, audit, and operational controls.
+5. Future expansion: inspection tooling, Logic modules, SDKs, optional C++/native
+   integrations, agents, additional clients, and more device integrations.
 
 Each stage should end with one complete vertical path before expanding the
 number of modules or supported transports.
