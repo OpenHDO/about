@@ -254,6 +254,28 @@ A Linker registration identifies its version, location, transports, health,
 and capabilities. The server turns the reported device inventory into its
 canonical registry and routes commands back through the owning session.
 
+## Reference vertical slice: RGB light
+
+The first end-to-end proof is one RGB light, implemented simulator-first and
+recorded in [ADR-0001](docs/ADR/0001-rgb-light-vertical-slice.md):
+
+1. `server` defines and owns the canonical light state, commands, replies, and
+   state events. Its built-in admin panel is the privileged server-owned
+   surface for inspecting and controlling that state.
+2. `server-linker` is the server-side boundary for Linker sessions, protocol
+   negotiation, registration, health, inventory, routing, and result mapping.
+3. `linker` owns the physical transport/driver contract. Its deterministic RGB
+   simulator implements that driver contract first; a real driver later replaces
+   it without changing server or client surfaces.
+4. `server-dashboard` and `app` are client surfaces. They consume the versioned
+   public API; each dashboard instance is independently scoped and neither
+   surface owns canonical device state or server administration.
+
+The simulator must cross the same `server-linker` boundary as hardware. The
+slice is complete when the admin panel, one dashboard instance, and one app can
+observe and command the simulated light, with contract tests proving that the
+simulator can be replaced by a physical driver.
+
 ## Security model
 
 Security is a platform boundary: least privilege for users, flows, agents,
