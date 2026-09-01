@@ -24,6 +24,7 @@ that owns them.
 | [server-logic](https://github.com/OpenHDO/server-logic) | Flows, nodes, conditions, and actions |
 | [server-linker](https://github.com/OpenHDO/server-linker) | Server-side Linker sessions, inventory, health, and routing |
 | [linker](https://github.com/OpenHDO/linker) | Standalone hardware-access process near radios and devices |
+| [agent](https://github.com/OpenHDO/agent) | Desktop and edge operating-system capabilities |
 | [sdk](https://github.com/OpenHDO/sdk) | Language-neutral contracts and SDK tooling |
 | [app](https://github.com/OpenHDO/app) | Native and specialized client applications |
 | [get-started](https://github.com/OpenHDO/get-started) | Installation, first run, and contributor onboarding |
