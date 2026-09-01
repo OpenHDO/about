@@ -22,7 +22,7 @@ contracts belong in the repository that owns them.
 | --- | --- |
 | [server](https://github.com/OpenHDO/server) | Python control plane backend/runtime/API, persistence boundary, orchestration, CLI, and built-in React web admin surface |
 | [server-dashboard](https://github.com/OpenHDO/server-dashboard) | Reusable React web-panel module for many dashboard instances |
-| [server-logic](https://github.com/OpenHDO/server-logic) | Flows, nodes, conditions, and actions |
+| [server-logic](https://github.com/OpenHDO/server-logic) | Python flow, node, condition, and action execution module |
 | [server-linker](https://github.com/OpenHDO/server-linker) | Python server-side Linker sessions, inventory, health, and routing |
 | [linker](https://github.com/OpenHDO/linker) | Standalone Python Linker with vendor-specific connections and device logic |
 | [agent](https://github.com/OpenHDO/agent) | Desktop and edge operating-system capabilities |
@@ -41,7 +41,7 @@ repository's contract or vocabulary.
 | `about` | Product overview, system boundaries, shared vocabulary, ADR process, and cross-repo governance | Runtime code, database schema, or wire-format implementation |
 | `server` | Python backend/runtime/API; canonical server API and Linker protocol schemas under `contracts/<major>/`; server state, policy, persistence boundary, orchestration, module hosting, and the built-in React web admin surface | Device-driver code, reusable client-dashboard behavior, or generated SDK bindings |
 | `server-dashboard` | Reusable React web-panel module behavior, instance-safe presentation, and its client-facing interaction contract | The built-in server admin surface, canonical server state, or a particular dashboard instance |
-| `server-logic` | Flow, node, condition, and action behavior | Transport, device access, or direct database access |
+| `server-logic` | Python flow, node, condition, and action behavior | Transport, device access, or direct database access |
 | `server-linker` | Python server-side Linker sessions, inventory, health, and routing implementation | The standalone Linker process or vendor-specific device logic |
 | `linker` | Standalone Python hardware access, vendor-specific connections, discovery, pairing, credentials, and device logic | Canonical server state or policy |
 | `agent` | Desktop and edge operating-system capabilities and their permissions | Hardware ownership or server persistence |
@@ -165,7 +165,7 @@ include `OpenHDO` where the word could be confused with a compiler linker.
 
 ## Technology direction
 
-- Python 3.11+ for the server backend/runtime/API and Linker;
+- Python 3.11+ for the server backend/runtime/API, server modules, and Linker;
 - SQLite as the future first single-node persistence backend;
 - HTTP and WebSocket for client and live-update APIs;
 - JSON Schema and versioned language-neutral messages at process boundaries;

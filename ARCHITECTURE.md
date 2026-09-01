@@ -77,7 +77,7 @@ tests, and release notes of that responsibility.
 | `about` | Product vocabulary, repository map, architecture, ADR process, and cross-repo governance | Documents decisions; owns no runtime state or wire schema. |
 | `server` | Python backend/runtime/API; Linker protocol schemas in `contracts/<major>/`, canonical state, policy, persistence boundary, orchestration, and built-in React web admin surface | Publishes normative schemas and compatibility decisions; does not own reusable client-dashboard instances or vendor-specific device logic. |
 | `server-dashboard` | Reusable React web-panel module, instance-safe presentation, and client-facing interaction contract | Does not own the built-in server admin surface, canonical state, or a particular dashboard instance. |
-| `server-logic` | Flows, nodes, conditions, and actions | Requests server capabilities; never writes the database directly. |
+| `server-logic` | Python flows, nodes, conditions, and actions | Requests server capabilities; never writes the database directly. |
 | `server-linker` | Python server-side Linker sessions, inventory, health, and routing | Implements the server side of the Linker contract; does not own vendor-specific device logic. |
 | `linker` | Standalone Python hardware access process, vendor-specific connections, discovery, pairing, credentials, and device logic | Implements device access behind the Linker contract; does not own canonical state or policy. |
 | `agent` | Desktop and edge OS capabilities | Uses a separate identity and explicit permissions. |
@@ -363,8 +363,9 @@ deliberately outside the first deployment target.
    recovery semantics.
 4. Future reliability and operations: durable delivery, broader authentication,
    authorization, audit, and operational controls.
-5. Future expansion: inspection tooling, Logic modules, SDKs, optional C++/native
-   integrations, agents, additional clients, and more device integrations.
+5. Future expansion: richer Logic nodes, inspection tooling, SDKs, optional
+   C++/native integrations, agents, additional clients, and more device
+   integrations.
 
 Each stage should end with one complete vertical path before expanding the
 number of modules or supported transports.
