@@ -10,8 +10,9 @@ OpenHDO is a local-first control plane with explicit process boundaries:
 
 - **Server** owns canonical state, orchestration, policy, persistence, audit,
   the public API, server modules, and its built-in configuration/admin surface.
-- **Linker** runs close to hardware and owns transports, device discovery,
-  pairing, local credentials, protocol drivers, and device events.
+- **Linker** is a standalone Python process close to hardware. It owns
+  transports, device discovery, pairing, local credentials, protocol drivers,
+  and device events.
 - **Agent** exposes desktop and operating-system capabilities under a separate
   identity; it is not a replacement for a hardware Linker.
 - **Plugin** is an isolated extension that communicates through public,
@@ -68,7 +69,7 @@ tests, and release notes of that responsibility.
 | `server-dashboard` | Reusable client-dashboard module, instance-safe presentation, and client-facing interaction contract | Does not own the built-in server admin surface, canonical state, or a particular dashboard instance. |
 | `server-logic` | Flows, nodes, conditions, and actions | Requests server capabilities; never writes the database directly. |
 | `server-linker` | Server-side Linker sessions, inventory, health, and routing | Implements the server side of the Linker contract. |
-| `linker` | Hardware access process, transports, discovery, pairing, and drivers | Implements device access behind the Linker contract. |
+| `linker` | Standalone Python hardware access process, transports, discovery, pairing, and drivers | Implements device access behind the Linker contract. |
 | `agent` | Desktop and edge OS capabilities | Uses a separate identity and explicit permissions. |
 | `sdk` | Generated bindings and SDK tooling | Derives from published schemas; cannot redefine them. |
 | `app` | Native and specialized clients | Consumes public contracts; does not duplicate orchestration. |
@@ -147,7 +148,11 @@ Every public HTTP, WebSocket, process, plugin, or SDK boundary must have:
    unknown optional fields, retries, and version mismatch behavior.
 
 The concrete transport may change without changing the logical contract. Keep
-transport-specific details in the owning repository's adapter or gateway.
+transport-specific details in the owning repository's adapter.
+
+Vendor integration source may be adapted only with verified
+Apache-2.0-compatible provenance and attribution; adapted code remains at the
+Linker driver edge and adds no external runtime dependency.
 
 ## Pattern selection rules
 
@@ -170,7 +175,7 @@ broker, abstraction layer, or asynchronous flow solely to use a pattern name.
 | External protocol/device integration | Channel Adapter; Messaging Bridge | A transport or protocol must connect without leaking its shape inward | Translate at the edge; use a bridge only when both sides must vary independently. |
 | Server application boundary | Fowler Service Layer + Domain Model | A request coordinates policy and domain behavior | Keep domain rules out of controllers and transports. |
 | SQLite persistence | Repository + Data Mapper + Unit of Work | Domain objects must stay independent of storage and writes need a transaction | Modules use interfaces; only the server persistence owner touches the database. |
-| External system access | Fowler Gateway; Value Object; Separated Interface | An external resource, identifier, or module boundary needs a stable seam | Keep credentials and wire types at the edge; make invalid values unrepresentable where practical. |
+| External system access | Value Object; Separated Interface | An external resource, identifier, or module boundary needs a stable seam | Keep credentials and wire types at the edge; make invalid values unrepresentable where practical. |
 | Real runtime variability | Strategy, Adapter, Bridge, or Plugin | Algorithms, drivers, or extensions genuinely vary independently | Define a narrow interface, lifecycle, permissions, and tests for each implementation. |
 | Notifications and lifecycle | Observer or State | Multiple observers need updates, or a lifecycle has valid transitions | Bound subscriptions and enumerate legal state transitions. |
 | Ordered policy steps | Chain of Responsibility | Independent validators/policies may accept, reject, or pass work in order | Make order explicit and stop on authorization failure. |
@@ -256,25 +261,22 @@ canonical registry and routes commands back through the owning session.
 
 ## Reference vertical slice: RGB light
 
-The first end-to-end proof is one RGB light, implemented simulator-first and
+The first end-to-end proof is one real vendor-specific RGB light over Wi-Fi,
 recorded in [ADR-0001](docs/ADR/0001-rgb-light-vertical-slice.md):
 
-1. `server` defines and owns the canonical light state, commands, replies, and
-   state events. Its built-in admin panel is the privileged server-owned
-   surface for inspecting and controlling that state.
+1. `server` defines and owns the canonical light state, commands, replies,
+   state events, server admin surface, and public API.
 2. `server-linker` is the server-side boundary for Linker sessions, protocol
    negotiation, registration, health, inventory, routing, and result mapping.
-3. `linker` owns the physical transport/driver contract. Its deterministic RGB
-   simulator implements that driver contract first; a real driver later replaces
-   it without changing server or client surfaces.
-4. `server-dashboard` and `app` are client surfaces. They consume the versioned
-   public API; each dashboard instance is independently scoped and neither
-   surface owns canonical device state or server administration.
+3. `linker` is a Python process that owns the vendor-specific Wi-Fi driver and
+   translates the vendor protocol at the driver edge.
+4. `server-dashboard` and `app` are client surfaces. They consume the server
+   API; each dashboard instance is independently scoped and neither surface
+   owns canonical device state or server administration.
 
-The simulator must cross the same `server-linker` boundary as hardware. The
-slice is complete when the admin panel, one dashboard instance, and one app can
-observe and command the simulated light, with contract tests proving that the
-simulator can be replaced by a physical driver.
+The slice is complete when the server admin surface, one dashboard instance,
+and one app can observe and command the real Wi-Fi light through the same
+server-linker boundary.
 
 ## Security model
 
@@ -291,8 +293,8 @@ the basic command and capability model is operational.
 
 - **Same host:** server and one or more Linkers on a Raspberry Pi, PC, or
   always-on local machine.
-- **Separate hardware host:** server on a PC/VPS and a Linker on a Raspberry Pi
-  or gateway with the required radio or USB device.
+- **Separate hardware host:** server on a PC/VPS and a Python Linker on a
+  Raspberry Pi or another host with network access to the Wi-Fi device.
 - **Multiple locations:** several authenticated Linkers connect to one server;
   each retains its own location, transports, inventory, credentials, and health.
 
@@ -303,7 +305,8 @@ deliberately outside the first deployment target.
 
 1. Server foundation, contracts, logging, registry, and in-memory execution.
 2. HTTP/WebSocket API, SQLite migrations, authentication baseline, and history.
-3. Linker process, one reference transport, identity, heartbeat, and reconnect.
+3. Python Linker process, one vendor-specific Wi-Fi driver, identity, heartbeat,
+   and reconnect.
 4. Dashboard, Logic, and server-Linker modules in the web panel.
 5. Python/C++ SDKs, agents, additional clients, and more integrations.
 

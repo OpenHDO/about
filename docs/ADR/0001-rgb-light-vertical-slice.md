@@ -1,4 +1,4 @@
-# ADR-0001: Deliver the RGB light vertical slice simulator-first
+# ADR-0001: Deliver the RGB light vertical slice over real Wi-Fi
 
 - Status: Accepted
 - Date: 2026-09-01
@@ -9,20 +9,22 @@
 
 ## Context
 
-OpenHDO needs one complete device path that proves ownership and contracts
-before hardware availability becomes a dependency. RGB light is the smallest
-useful slice: it has canonical state, commands, replies, events, a transport
-boundary, and more than one client surface.
+OpenHDO needs one complete device path that proves ownership, contracts, and
+physical device access. An RGB light is the smallest useful slice: it has
+canonical state, commands, replies, events, a transport boundary, and more
+than one client surface. The path must exercise a real vendor-specific Wi-Fi
+driver.
 
 ## Decision
 
 - `server` owns canonical RGB light/device state, policy, the versioned public
-  contract, and the built-in configuration/admin panel.
+  contract, the built-in server admin surface, and the public API.
 - `server-linker` owns the server-side Linker boundary: session negotiation,
   registration, health, inventory, routing, and command/result mapping.
-- `linker` owns physical transport and driver behavior. A deterministic RGB
-  simulator is the first driver and uses the same boundary as hardware.
-- `server-dashboard` is a reusable client-dashboard module; many independently
+- `linker` is a Python 3.11+ process. It owns physical Wi-Fi access and the
+  vendor-specific RGB driver, including vendor discovery, authentication, and
+  protocol translation.
+- `server-dashboard` is a reusable client-dashboard module; independently
   scoped dashboard instances may consume the same state. `app` is another
   client surface. Neither is an authority for device state or server admin.
 
@@ -31,53 +33,42 @@ color, plus commands to change it, replies to conclude commands, and events to
 report state that changed. Exact wire field names belong in the server-owned
 contract, not in this ADR.
 
-## Simulator-first path
+## Real Wi-Fi path
 
-1. Define the versioned contract and canonical in-memory state in `server`.
-2. Control and inspect the simulated light through the built-in server admin
-   panel.
-3. Connect the simulator through `server-linker` using the normal Linker
-   negotiation, registration, heartbeat, routing, and result path.
-4. Verify one `server-dashboard` instance and one `app` surface through the
-   public API, then replace only the simulator driver with a physical RGB
-   driver.
+1. `server` defines the versioned contract and canonical state, exposes the
+   public API, and provides the built-in server admin surface.
+2. `server-linker` authenticates the Python Linker process, negotiates the
+   Linker protocol, registers the device, tracks health, and routes commands.
+3. The Python `linker` process discovers and authenticates to the real RGB
+   light over Wi-Fi, then translates its vendor protocol at the driver edge.
+4. `server-dashboard` and `app` read state and issue commands through the
+   server API. They do not connect to the light or become a source of truth.
 
-No client or server change is allowed when the simulator is replaced by
-hardware. The simulator must not bypass authentication, validation, routing,
-observability, or the server's canonical state.
+All commands and reported state cross the normal authenticated, validated,
+observable `server-linker` boundary. The server remains canonical when the
+device is unavailable, reconnects, or reports a failure.
 
 ## Patterns and contract rules
 
 Use Envelope Wrapper, Command Message, Event Message, Request-Reply, and
 Correlation Identifier at the public/process boundary. Use a Message Router in
-`server-linker`, a Channel Adapter at the Linker driver edge, and Strategy only
-where simulator and physical-driver behavior genuinely varies. Receivers must
+`server-linker` and a Channel Adapter at the Linker driver edge. Receivers must
 be idempotent for retryable commands; message IDs and correlation IDs must be
 observable. Do not add a broker, Guaranteed Delivery, or a Message Store until
 the delivery requirement is demonstrated.
 
-## Home Assistant reuse boundary
+## Vendor source reuse
 
-Home Assistant is a reference for semantics and protocol ideas, not an
-OpenHDO runtime dependency or authority. The following boundary is mandatory:
-
-- Allowed: study or reuse compatible entity/capability semantics, protocol
-  ideas, and code only when its license is compatible with the target OpenHDO
-  repository and distribution; record provenance and attribution.
-- Not allowed: blind copying, copying code without license verification,
-  importing Home Assistant as a hidden runtime dependency, coupling the
-  server/Linker contract to Home Assistant APIs, or treating Home Assistant's
-  state model as canonical without an OpenHDO contract decision.
-
-Any reused code is isolated behind an owned OpenHDO boundary, reviewed for
-license compatibility, and covered by the same validation and contract tests as
-new code.
+Source from a specific Home Assistant vendor integration may be adapted only
+when its provenance and license are verified as Apache-2.0-compatible. Preserve
+the required copyright, license, and attribution notices in the owning
+repository. Adapted code must be isolated in the Python Linker driver edge;
+OpenHDO must not import a Home Assistant runtime or depend on its APIs.
 
 ## Consequences and evidence
 
-The slice can run without hardware or Home Assistant and proves the swap from
-simulator to driver. It also fixes a single authority for state and keeps the
-admin panel separate from reusable client dashboards. Evidence is the server,
-server-linker, and Linker simulator contract tests, plus client tests for
-initial state, command reply, state event, retry/deduplication, malformed input,
-and simulator replacement.
+The slice validates the real Wi-Fi path, keeps canonical state and policy in
+the server, and keeps client surfaces independent of vendor protocol details.
+Evidence is the server, server-linker, and Python Linker contract coverage, plus
+client tests for initial state, command reply, state event, retry/deduplication,
+malformed input, device unavailability, and reconnect behavior.
