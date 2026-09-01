@@ -20,13 +20,13 @@ contracts belong in the repository that owns them.
 
 | Repository | Responsibility |
 | --- | --- |
-| [server](https://github.com/OpenHDO/server) | C++ control plane, API, persistence, orchestration, CLI, panel host, and built-in server admin surface |
-| [server-dashboard](https://github.com/OpenHDO/server-dashboard) | Reusable client-dashboard module for many dashboard instances |
+| [server](https://github.com/OpenHDO/server) | Python control plane backend/runtime/API, persistence, orchestration, CLI, and built-in React web admin surface |
+| [server-dashboard](https://github.com/OpenHDO/server-dashboard) | Reusable React web-panel module for many dashboard instances |
 | [server-logic](https://github.com/OpenHDO/server-logic) | Flows, nodes, conditions, and actions |
-| [server-linker](https://github.com/OpenHDO/server-linker) | Server-side Linker sessions, inventory, health, and routing |
-| [linker](https://github.com/OpenHDO/linker) | Standalone Python hardware-access process with vendor-specific device drivers |
+| [server-linker](https://github.com/OpenHDO/server-linker) | Python server-side Linker sessions, inventory, health, and routing |
+| [linker](https://github.com/OpenHDO/linker) | Standalone Python Linker with vendor-specific connections and device logic |
 | [agent](https://github.com/OpenHDO/agent) | Desktop and edge operating-system capabilities |
-| [sdk](https://github.com/OpenHDO/sdk) | Generated bindings, SDK tooling, and compatibility helpers |
+| [sdk](https://github.com/OpenHDO/sdk) | Generated bindings, Python SDK tooling, and optional C++/native integration SDKs |
 | [app](https://github.com/OpenHDO/app) | Native and specialized client applications |
 | [get-started](https://github.com/OpenHDO/get-started) | Installation, first run, and contributor onboarding |
 
@@ -39,13 +39,13 @@ repository's contract or vocabulary.
 | Repository | Owns | Does not own |
 | --- | --- | --- |
 | `about` | Product overview, system boundaries, shared vocabulary, ADR process, and cross-repo governance | Runtime code, database schema, or wire-format implementation |
-| `server` | Canonical server API and Linker protocol schemas under `contracts/<major>/`; server state, policy, persistence, orchestration, module hosting, and the built-in server admin surface | Device-driver code, reusable client-dashboard behavior, or generated SDK bindings |
-| `server-dashboard` | Reusable client-dashboard module behavior, instance-safe presentation, and its client-facing interaction contract | The built-in server admin surface, canonical server state, or a particular dashboard instance |
+| `server` | Python backend/runtime/API; canonical server API and Linker protocol schemas under `contracts/<major>/`; server state, policy, persistence, orchestration, module hosting, and the built-in React web admin surface | Device-driver code, reusable client-dashboard behavior, or generated SDK bindings |
+| `server-dashboard` | Reusable React web-panel module behavior, instance-safe presentation, and its client-facing interaction contract | The built-in server admin surface, canonical server state, or a particular dashboard instance |
 | `server-logic` | Flow, node, condition, and action behavior | Transport, device access, or direct database access |
-| `server-linker` | Server-side Linker sessions, inventory, health, and routing implementation | The standalone Linker process or device-driver implementation |
-| `linker` | Standalone Python hardware access, transports, discovery, pairing, and vendor-specific device drivers | Canonical server state or policy |
+| `server-linker` | Python server-side Linker sessions, inventory, health, and routing implementation | The standalone Linker process or vendor-specific device logic |
+| `linker` | Standalone Python hardware access, vendor-specific connections, discovery, pairing, credentials, and device logic | Canonical server state or policy |
 | `agent` | Desktop and edge operating-system capabilities and their permissions | Hardware ownership or server persistence |
-| `sdk` | Generated language bindings, SDK tooling, and compatibility helpers derived from published contracts | The normative wire schemas |
+| `sdk` | Generated language bindings, Python SDK tooling, optional C++/native integration SDKs, and compatibility helpers derived from published contracts | The normative wire schemas or the server runtime |
 | `app` | Native and specialized client applications | Server orchestration or canonical data |
 | `get-started` | Installation, first-run, and contributor onboarding | Product or protocol authority |
 
@@ -59,7 +59,7 @@ changes.
 server-dashboard / app / panel / CLI
                  │ public server API
                  ▼
-          openhdo-server ─── canonical state, admin, API
+           openhdo-server ─── Python backend/runtime/API, abstract Light model
                  │
                  │ versioned Linker protocol
                  ▼
@@ -69,23 +69,29 @@ server-dashboard / app / panel / CLI
        Python openhdo-linker ─── vendor-specific Wi-Fi driver ─── RGB light
 ```
 
-The server owns shared state and policy. A Linker owns local hardware access.
-Multiple Linkers can connect to one server, locally or across an authenticated
-network. Agents and plugins are separate extension points with explicit
-permissions.
+The server owns shared state and policy. Its public contracts expose an abstract,
+vendor-neutral Light model (including normalized power, brightness, color, and
+capabilities where supported). Vendor names, protocols, credentials, discovery
+details, and raw payloads stay hidden inside the Python Linker; they must not
+leak into server state, the public API, SDKs, or React web panels. A Linker owns
+local hardware access and vendor-specific device logic. Multiple Linkers can
+connect to one server, locally or across an authenticated network. Agents and
+plugins are separate extension points with explicit permissions.
 
 ## RGB light vertical slice
 
 The first end-to-end path uses one real vendor-specific RGB light over Wi-Fi:
 
-- `server` owns the canonical light state, server admin surface, public API,
-  commands, replies, and state events.
-- `server-linker` owns the server-side Linker session, registration, health,
-  inventory, routing, and result mapping boundary.
-- `linker` is a Python process that discovers, authenticates, and controls the
-  light through its vendor-specific Wi-Fi driver.
-- `server-dashboard` and `app` are client surfaces that read and command the
-  light through the server API; neither owns canonical state.
+- `server` is the Python backend/runtime/API. It owns the abstract canonical
+  Light model, server admin surface, public API, commands, replies, and state
+  events.
+- `server-linker` is the Python server-side Linker session, registration,
+  health, inventory, routing, and result-mapping boundary.
+- `linker` is a Python process that owns the vendor-specific connection and
+  device logic for the real light.
+- `server-dashboard`, the built-in admin surface, and any other web panels are
+  React clients of the server API; neither web panels nor `app` owns canonical
+  state or vendor details.
 
 The complete path is recorded in [ADR-0001](docs/ADR/0001-rgb-light-vertical-slice.md).
 
@@ -98,9 +104,9 @@ setup-specific dashboard. The module is reusable; the instance supplies its
 own identity, placement, context, layout, and permissions through public
 contracts.
 
-The **server admin surface** is different. It is a privileged, built-in surface
-shipped and owned by `server` for server configuration, policy, identities,
-Linker administration, and operational controls. It is not a
+The **server admin surface** is different. It is a privileged, built-in React
+web panel shipped and owned by `server` for server configuration, policy,
+identities, Linker administration, and operational controls. It is not a
 `server-dashboard` instance and must not be moved into the reusable client
 module. See [ARCHITECTURE.md](ARCHITECTURE.md) for the ownership and pattern
 rules.
@@ -141,17 +147,21 @@ include `OpenHDO` where the word could be confused with a compiler linker.
 
 ## Technology direction
 
-- C++20/23 for the server runtime, agents, and native SDK;
-- CMake for builds and dependency boundaries;
+- Python 3.11+ for the server backend/runtime/API and Linker;
 - SQLite for the first single-node persistence backend;
 - HTTP and WebSocket for client and live-update APIs;
 - JSON Schema and versioned language-neutral messages at process boundaries;
-- React + TypeScript + Tailwind + shadcn-style primitives for web panels;
-- Python 3.11+ for the Linker process and optional SDK tooling.
+- React + TypeScript + Tailwind + shadcn-style primitives for every web panel;
+- C++ is limited to optional SDK/native integration; the server runtime and web
+  panels have no native dependency.
 
 The initial deployment is a single server with zero or more Linkers. Clusters,
 cloud dependency, generic microservices, and direct plugin database access are
 out of scope until real operational requirements justify them.
+
+Simulator runtimes, Home Assistant runtimes/APIs, and gateway deployments are
+not OpenHDO runtime components. Real device access goes through the Python
+Linker, with vendor-specific details isolated at its driver edge.
 
 ## Engineering guardrails
 
@@ -168,7 +178,9 @@ out of scope until real operational requirements justify them.
 
 ## Status
 
-The [server](https://github.com/OpenHDO/server) repository contains the first
-buildable foundation: C++ runtime and CLI, protocol v1 schemas, a panel shell,
-Python reference SDK, and CI. The next end-to-end milestone is the real RGB
-Wi-Fi path with one authenticated Python Linker session.
+The [server](https://github.com/OpenHDO/server) repository contains the current
+Python backend/runtime/API foundation, protocol v1 schemas, a React panel shell,
+Python SDK tooling, and CI. The runtime decision is recorded in
+[ADR-0002](docs/ADR/0002-python-server-react-panels.md). The next end-to-end
+milestone is the real RGB Wi-Fi path with one authenticated Python Linker
+session.

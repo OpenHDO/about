@@ -2,17 +2,20 @@
 
 This document is the cross-repository architecture contract. It defines
 ownership, vocabulary, boundary rules, and the minimum process for decisions.
-It does not replace implementation documentation in the owning repository.
+It does not replace implementation documentation in the owning repository. The
+current runtime and web-panel decision is recorded in
+[ADR-0002](docs/ADR/0002-python-server-react-panels.md).
 
 ## Product boundaries
 
 OpenHDO is a local-first control plane with explicit process boundaries:
 
-- **Server** owns canonical state, orchestration, policy, persistence, audit,
-  the public API, server modules, and its built-in configuration/admin surface.
+- **Server** is the primary Python backend/runtime/API. It owns canonical state,
+  orchestration, policy, persistence, audit, the public API, server modules, and
+  its built-in React configuration/admin surface.
 - **Linker** is a standalone Python process close to hardware. It owns
-  transports, device discovery, pairing, local credentials, protocol drivers,
-  and device events.
+  vendor-specific connections and device logic: transports, discovery, pairing,
+  local credentials, protocol drivers, and device events.
 - **Agent** exposes desktop and operating-system capabilities under a separate
   identity; it is not a replacement for a hardware Linker.
 - **Plugin** is an isolated extension that communicates through public,
@@ -20,6 +23,11 @@ OpenHDO is a local-first control plane with explicit process boundaries:
 - **Client** is a view or control surface that may host one or more dashboard
   instances. It does not duplicate orchestration or become a second source of
   truth.
+
+Every web panel, including dashboard instances and the built-in server admin
+surface, is a React client of the Python server API. C++ is optional and limited
+to SDK/native integration; the server runtime and web panels have no native
+dependency.
 
 The first server release is a modular monolith. `server-logic` and
 `server-linker` are server module boundaries; `server-dashboard` is a reusable
@@ -46,12 +54,12 @@ Ownership is split deliberately:
 - `server` owns canonical state, authorization, and any API used to create,
   read, update, or delete instance configuration.
 
-The **server admin surface** is a separate, privileged surface built into and
-released by `server`. It manages server configuration, identities and policy,
-Linker administration, modules, and operational controls. It uses server-owned
-services and authorization directly. It is not a `server-dashboard` instance,
-does not count toward dashboard-instance multiplicity, and must not be made a
-dependency of the reusable client module.
+The **server admin surface** is a separate, privileged React web panel built
+into and released by `server`. It manages server configuration, identities and
+policy, Linker administration, modules, and operational controls. It uses
+server-owned services and authorization directly. It is not a
+`server-dashboard` instance, does not count toward dashboard-instance
+multiplicity, and must not be made a dependency of the reusable client module.
 
 Any proposal that changes a reusable dashboard module, a dashboard instance,
 or the built-in admin surface must name which of the three it changes and keep
@@ -65,13 +73,13 @@ tests, and release notes of that responsibility.
 | Repository | Canonical responsibility | Boundary rule |
 | --- | --- | --- |
 | `about` | Product vocabulary, repository map, architecture, ADR process, and cross-repo governance | Documents decisions; owns no runtime state or wire schema. |
-| `server` | Server API, Linker protocol schemas in `contracts/<major>/`, canonical state, policy, persistence, orchestration, and built-in server admin surface | Publishes normative schemas and compatibility decisions; does not own reusable client-dashboard instances. |
-| `server-dashboard` | Reusable client-dashboard module, instance-safe presentation, and client-facing interaction contract | Does not own the built-in server admin surface, canonical state, or a particular dashboard instance. |
+| `server` | Python backend/runtime/API; Linker protocol schemas in `contracts/<major>/`, canonical state, policy, persistence, orchestration, and built-in React web admin surface | Publishes normative schemas and compatibility decisions; does not own reusable client-dashboard instances or vendor-specific device logic. |
+| `server-dashboard` | Reusable React web-panel module, instance-safe presentation, and client-facing interaction contract | Does not own the built-in server admin surface, canonical state, or a particular dashboard instance. |
 | `server-logic` | Flows, nodes, conditions, and actions | Requests server capabilities; never writes the database directly. |
-| `server-linker` | Server-side Linker sessions, inventory, health, and routing | Implements the server side of the Linker contract. |
-| `linker` | Standalone Python hardware access process, transports, discovery, pairing, and drivers | Implements device access behind the Linker contract. |
+| `server-linker` | Python server-side Linker sessions, inventory, health, and routing | Implements the server side of the Linker contract; does not own vendor-specific device logic. |
+| `linker` | Standalone Python hardware access process, vendor-specific connections, discovery, pairing, credentials, and device logic | Implements device access behind the Linker contract; does not own canonical state or policy. |
 | `agent` | Desktop and edge OS capabilities | Uses a separate identity and explicit permissions. |
-| `sdk` | Generated bindings and SDK tooling | Derives from published schemas; cannot redefine them. |
+| `sdk` | Generated bindings, Python SDK tooling, and optional native integration SDKs (including C++) | Derives from published schemas; cannot redefine them or become the runtime. |
 | `app` | Native and specialized clients | Consumes public contracts; does not duplicate orchestration. |
 | `get-started` | Installation and onboarding | Documents released behavior; does not define it. |
 
@@ -121,9 +129,23 @@ Use **command** for intent, **event** for fact, **query** for read, and
 **reply** for completion. “Message” is the generic term only when the kind is
 irrelevant.
 
+## Abstract Light model and vendor isolation
+
+The server exposes a vendor-neutral, abstract `Light` domain model. Its
+normalized state includes power, brightness, RGB color, and declared
+capabilities where supported; commands, replies, and events use this model and
+do not expose a vendor protocol shape.
+
+Vendor names, protocol payloads, discovery details, credentials, and
+vendor-specific connection or device logic remain inside the Python Linker.
+The Linker translates those details at the driver edge and reports only the
+normalized model through the authenticated server-linker boundary. They must
+not leak into server persistence, public API schemas, SDKs, or React web
+panels.
+
 ## Communication
 
-The public server API is planned as HTTP for queries, configuration, and
+The Python server API is planned as HTTP for queries, configuration, and
 commands, plus WebSocket for live state, events, logs, and execution updates.
 Process boundaries use small versioned JSON messages. The logical v1 envelope
 is defined in the [server contracts](https://github.com/OpenHDO/server/tree/master/contracts/v1);
@@ -153,6 +175,11 @@ transport-specific details in the owning repository's adapter.
 Vendor integration source may be adapted only with verified
 Apache-2.0-compatible provenance and attribution; adapted code remains at the
 Linker driver edge and adds no external runtime dependency.
+
+Simulator runtimes, Home Assistant runtimes or APIs, and gateway deployments
+are prohibited as OpenHDO runtime components. The supported device path is a
+real device connected through the Python Linker; vendor source reuse must not
+turn into a Home Assistant runtime dependency or a gateway boundary.
 
 ## Pattern selection rules
 
@@ -264,15 +291,17 @@ canonical registry and routes commands back through the owning session.
 The first end-to-end proof is one real vendor-specific RGB light over Wi-Fi,
 recorded in [ADR-0001](docs/ADR/0001-rgb-light-vertical-slice.md):
 
-1. `server` defines and owns the canonical light state, commands, replies,
-   state events, server admin surface, and public API.
-2. `server-linker` is the server-side boundary for Linker sessions, protocol
-   negotiation, registration, health, inventory, routing, and result mapping.
-3. `linker` is a Python process that owns the vendor-specific Wi-Fi driver and
-   translates the vendor protocol at the driver edge.
-4. `server-dashboard` and `app` are client surfaces. They consume the server
-   API; each dashboard instance is independently scoped and neither surface
-   owns canonical device state or server administration.
+1. `server` is the Python backend/runtime/API. It defines and owns the
+   canonical abstract Light model, commands, replies, state events, server
+   admin surface, and public API.
+2. `server-linker` is the Python server-side boundary for Linker sessions,
+   protocol negotiation, registration, health, inventory, routing, and result
+   mapping.
+3. `linker` is a Python process that owns the vendor-specific connection and
+   device logic, translating the vendor protocol at the driver edge.
+4. `server-dashboard`, the built-in admin surface, and any other web panels are
+   React clients. `app` is another client surface. They consume the abstract
+   server API and neither owns canonical device state or vendor details.
 
 The slice is complete when the server admin surface, one dashboard instance,
 and one app can observe and command the real Wi-Fi light through the same
@@ -303,12 +332,13 @@ deliberately outside the first deployment target.
 
 ## Delivery sequence
 
-1. Server foundation, contracts, logging, registry, and in-memory execution.
-2. HTTP/WebSocket API, SQLite migrations, authentication baseline, and history.
+1. Python server foundation, contracts, logging, registry, and in-memory execution.
+2. Python HTTP/WebSocket API, SQLite migrations, authentication baseline, and history.
 3. Python Linker process, one vendor-specific Wi-Fi driver, identity, heartbeat,
    and reconnect.
-4. Dashboard, Logic, and server-Linker modules in the web panel.
-5. Python/C++ SDKs, agents, additional clients, and more integrations.
+4. React web panels plus Logic and server-Linker modules.
+5. Python SDKs, optional C++/native integrations, agents, additional clients,
+   and more integrations.
 
 Each stage should end with one complete vertical path before expanding the
 number of modules or supported transports.
