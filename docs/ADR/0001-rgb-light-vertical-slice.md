@@ -27,10 +27,12 @@ driver.
 - `server-dashboard` is the sole reusable React/TypeScript dashboard module. It
   owns dashboard definitions, visual components, widgets, composition, and
   independently scoped dashboard instances; it consumes the same server state.
-- `app` is only a packager/build wrapper for already-built `server-dashboard`
-  artifacts. It writes metadata consumed by an external platform launcher; the
-  `app` repository currently contains no launcher runtime. It has no UI,
-  screens, dashboard definitions, server API, or device/light transport
+- `app` accepts a pre-built static dashboard artifact from an external host/build
+  pipeline that uses `server-dashboard`; the library distribution (`dist`) of
+  `server-dashboard` itself is not an `app` input. It packages that artifact
+  for target platforms and writes metadata consumed by an external platform
+  launcher; the `app` repository currently contains no launcher runtime. It has
+  no UI, screens, dashboard definitions, server API, or device/light transport
   responsibility.
 
 The semantic minimum is a light state containing power, brightness, and RGB
@@ -49,10 +51,12 @@ contract, not in this ADR.
 4. `server-dashboard` reads state and issues commands through the server API;
    it does not connect to the light or become a source of truth. The built-in
    admin surface remains in `server`.
-5. `app` only packages an already-built `server-dashboard` artifact and writes
-   metadata consumed by an external platform launcher; it currently contains no
-   launcher runtime and is not part of the server API or device/light transport
-   path.
+5. `app` accepts a pre-built static dashboard artifact from an external
+   host/build pipeline that uses `server-dashboard`; the library distribution
+   (`dist`) of `server-dashboard` itself is not an `app` input. It packages that
+   artifact and writes metadata consumed by an external platform launcher; it
+   currently contains no launcher runtime and is not part of the server API or
+   device/light transport path.
 
 All commands and reported state cross the normal authenticated, validated,
 observable `server-linker` boundary. The server remains canonical when the

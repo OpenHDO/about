@@ -27,7 +27,7 @@ contracts belong in the repository that owns them.
 | [linker](https://github.com/OpenHDO/linker) | Standalone Python Linker with vendor-specific connections and device logic |
 | [agent](https://github.com/OpenHDO/agent) | Desktop and edge operating-system capabilities |
 | [sdk](https://github.com/OpenHDO/sdk) | Generated bindings, Python SDK tooling, and optional C++/native integration SDKs |
-| [app](https://github.com/OpenHDO/app) | Packager/build wrapper for already-built `server-dashboard` artifacts on target platforms; writes metadata consumed by an external platform launcher; contains no launcher runtime, UI, or server API client |
+| [app](https://github.com/OpenHDO/app) | Accepts a pre-built static dashboard artifact from an external host/build pipeline that uses `server-dashboard`; packages it for target platforms and writes metadata consumed by an external platform launcher; the `server-dashboard` library `dist` itself is not an `app` input; contains no launcher runtime, UI, or server API client |
 | [get-started](https://github.com/OpenHDO/get-started) | Installation, first run, and contributor onboarding |
 
 ## Ownership and authority
@@ -46,7 +46,7 @@ repository's contract or vocabulary.
 | `linker` | Standalone Python hardware access, vendor-specific connections, discovery, pairing, credentials, and device logic | Canonical server state or policy |
 | `agent` | Desktop and edge operating-system capabilities and their permissions | Hardware ownership or server persistence |
 | `sdk` | Generated language bindings, Python SDK tooling, optional C++/native integration SDKs, and compatibility helpers derived from published contracts | The normative wire schemas or the server runtime |
-| `app` | Packaging/build-wrapper behavior for already-built `server-dashboard` artifacts and metadata consumed by an external platform launcher | UI, screens, dashboard definitions, reusable dashboard components/widgets/composition, server API, server orchestration, canonical data, device/light transport, or the external launcher runtime |
+| `app` | Accepts a pre-built static dashboard artifact from an external host/build pipeline that uses `server-dashboard`; packages it for target platforms and writes metadata consumed by an external platform launcher; the `server-dashboard` library `dist` itself is not an `app` input | UI, screens, dashboard definitions, reusable dashboard components/widgets/composition, server API, server orchestration, canonical data, device/light transport, or the external launcher runtime |
 | `get-started` | Installation, first-run, and contributor onboarding | Product or protocol authority |
 
 When ownership is unclear, [ARCHITECTURE.md](ARCHITECTURE.md) is the starting
@@ -69,8 +69,10 @@ server-dashboard / panel / CLI
        Python openhdo-linker ─── vendor-specific Wi-Fi driver ─── RGB light
 ```
 
-`app` is outside this API path: it packages or wraps an already-built
-`server-dashboard` artifact for a target platform and writes metadata for an
+`app` is outside this API path. It accepts a pre-built static dashboard artifact
+from an external host/build pipeline that uses `server-dashboard`; the
+`server-dashboard` library distribution (`dist`) itself is not an `app` input.
+It packages that artifact for a target platform and writes metadata for an
 external platform launcher. The `app` repository currently contains no launcher
 runtime.
 
@@ -99,10 +101,12 @@ The first end-to-end path uses one real vendor-specific RGB light over Wi-Fi:
   dashboard definitions, visual components, widgets, composition, and
   independently scoped dashboard instances. The built-in admin surface is a
   separate React panel owned by `server`.
-- `app` only packages already-built `server-dashboard` artifacts and writes
-  metadata consumed by an external platform launcher; it currently contains no
-  launcher runtime, UI, screens, dashboard definitions, server API, or
-  device/light transport responsibility.
+- `app` accepts a pre-built static dashboard artifact from an external host/build
+  pipeline that uses `server-dashboard`; the library distribution (`dist`) of
+  `server-dashboard` itself is not an `app` input. It packages that artifact and
+  writes metadata consumed by an external platform launcher; it currently
+  contains no launcher runtime, UI, screens, dashboard definitions, server API,
+  or device/light transport responsibility.
 
 The complete path is recorded in [ADR-0001](docs/ADR/0001-rgb-light-vertical-slice.md).
 
