@@ -5,8 +5,9 @@ for devices, computers, operating systems, services, dashboards, and
 automations.
 
 This repository is the product-level source of truth. It explains how the
-repositories fit together; implementation details belong in the repository
-that owns them.
+repositories fit together, owns the shared product vocabulary, and records
+cross-repository architectural decisions. Implementation details and runtime
+contracts belong in the repository that owns them.
 
 ## Start here
 
@@ -25,9 +26,32 @@ that owns them.
 | [server-linker](https://github.com/OpenHDO/server-linker) | Server-side Linker sessions, inventory, health, and routing |
 | [linker](https://github.com/OpenHDO/linker) | Standalone hardware-access process near radios and devices |
 | [agent](https://github.com/OpenHDO/agent) | Desktop and edge operating-system capabilities |
-| [sdk](https://github.com/OpenHDO/sdk) | Language-neutral contracts and SDK tooling |
+| [sdk](https://github.com/OpenHDO/sdk) | Generated bindings, SDK tooling, and compatibility helpers |
 | [app](https://github.com/OpenHDO/app) | Native and specialized client applications |
 | [get-started](https://github.com/OpenHDO/get-started) | Installation, first run, and contributor onboarding |
+
+## Ownership and authority
+
+The repository named below is the decision-maker for the responsibility in its
+row. A consumer may propose a change, but it must not silently fork the owning
+repository's contract or vocabulary.
+
+| Repository | Owns | Does not own |
+| --- | --- | --- |
+| `about` | Product overview, system boundaries, shared vocabulary, ADR process, and cross-repo governance | Runtime code, database schema, or wire-format implementation |
+| `server` | Canonical server API and Linker protocol schemas under `contracts/<major>/`; server state, policy, persistence, orchestration, and module hosting | Device-driver code, client-specific UI, or generated SDK bindings |
+| `server-dashboard` | Dashboard module behavior and panel-facing presentation | Canonical server state or protocol schemas |
+| `server-logic` | Flow, node, condition, and action behavior | Transport, device access, or direct database access |
+| `server-linker` | Server-side Linker sessions, inventory, health, and routing implementation | The standalone Linker process or device-driver implementation |
+| `linker` | Standalone hardware access, transports, discovery, pairing, and device drivers | Canonical server state or policy |
+| `agent` | Desktop and edge operating-system capabilities and their permissions | Hardware ownership or server persistence |
+| `sdk` | Generated language bindings, SDK tooling, and compatibility helpers derived from published contracts | The normative wire schemas |
+| `app` | Native and specialized client applications | Server orchestration or canonical data |
+| `get-started` | Installation, first-run, and contributor onboarding | Product or protocol authority |
+
+When ownership is unclear, [ARCHITECTURE.md](ARCHITECTURE.md) is the starting
+point; the runtime owner is then recorded in an ADR before a public contract
+changes.
 
 ## System shape
 
@@ -46,6 +70,27 @@ The server owns shared state and policy. A Linker owns local hardware access.
 Multiple Linkers can connect to one server, locally or across an authenticated
 network. Agents and plugins are separate extension points with explicit
 permissions.
+
+## Protocol vocabulary
+
+Use these terms consistently in issues, schemas, logs, and tests. The detailed
+boundary rules live in [ARCHITECTURE.md](ARCHITECTURE.md).
+
+| Term | Meaning |
+| --- | --- |
+| Envelope | Versioned metadata around a payload: contract, message kind, message ID, timestamp, sender, and optional correlation ID. |
+| Command | An addressed, validated request to change state or perform work; it may be retried and must have an explicit result. |
+| Event | An immutable fact that already happened; consumers may observe it but cannot alter its meaning. |
+| Query | A read-only request for current or historical data. |
+| Reply | The response to a command or query; it carries success or a structured error and echoes correlation. |
+| Correlation ID | The identifier joining a request, reply, retries, logs, and resulting events. |
+| Message ID | The unique identifier used for deduplication and tracing of one message delivery. |
+| Capability | A typed operation or value a device/entity exposes; it is not a transport or UI control. |
+| Contract version | The negotiated major version plus schema revision governing a boundary. |
+
+Commands express intent; events express facts; queries read; replies conclude a
+request. Do not use “event” for a command or “message” as an unqualified
+substitute when the distinction affects delivery, authorization, or retries.
 
 ## Naming
 
@@ -73,6 +118,19 @@ include `OpenHDO` where the word could be confused with a compiler linker.
 The initial deployment is a single server with zero or more Linkers. Clusters,
 cloud dependency, generic microservices, and direct plugin database access are
 out of scope until real operational requirements justify them.
+
+## Engineering guardrails
+
+- Every public boundary is versioned, schema-validated, observable, and tested
+  by both its owner and its consumers.
+- Prefer an in-process module boundary in the modular monolith. Introduce a
+  process, queue, or broker only when isolation, failure, deployment, or
+  ownership requirements justify its operational cost.
+- Keep authority singular: the server owns canonical state and policy; clients,
+  Linkers, agents, and plugins report or request through contracts.
+- Record a cross-repository contract change and any major pattern choice in an
+  ADR before implementation. See [ARCHITECTURE.md](ARCHITECTURE.md) and the
+  [ADR template](docs/ADR/0000-template.md).
 
 ## Status
 
