@@ -25,9 +25,11 @@ OpenHDO is a local-first control plane with explicit process boundaries:
 - **Client** is a view or control surface that may host one or more dashboard
   instances. It does not duplicate orchestration or become a second source of
   truth.
-- **App** is only a packager, launcher, and build wrapper for already-built
-  `server-dashboard` artifacts on target platforms. It has no UI, screens,
-  dashboard definitions, server API, or device/light transport responsibility.
+- **App** is only a packager/build wrapper for already-built `server-dashboard`
+  artifacts on target platforms. It writes metadata consumed by an external
+  platform launcher; the `app` repository currently contains no launcher
+  runtime. It has no UI, screens, dashboard definitions, server API, or
+  device/light transport responsibility.
 
 `server-dashboard` is the sole reusable React/TypeScript dashboard UI module. It
 owns dashboard definitions, visual components, widgets, composition, and the
@@ -57,10 +59,11 @@ Ownership is split deliberately:
   dashboard definitions, visual components, widgets, composition, interaction
   behavior, and the instance-safe contract for multiple independent instances.
   It must not own server policy or assume there is only one dashboard.
-- A platform wrapper may package or launch an already-built
-  `server-dashboard` artifact, but it does not define screens, dashboards, or
-  API/device behavior. Shared or persisted configuration still goes through
-  the server's versioned API when it is server state.
+- `app` packages an already-built `server-dashboard` artifact and writes
+  metadata consumed by the external platform launcher; the launcher is outside
+  `app`. It does not define screens, dashboards, or API/device behavior. Shared
+  or persisted configuration still goes through the server's versioned API
+  when it is server state.
 - `server` owns canonical state, authorization, and any API used to create,
   read, update, or delete instance configuration.
 
@@ -90,7 +93,7 @@ tests, and release notes of that responsibility.
 | `linker` | Standalone Python hardware access process, vendor-specific connections, discovery, pairing, credentials, and device logic | Implements device access behind the Linker contract; does not own canonical state or policy. |
 | `agent` | Desktop and edge OS capabilities | Uses a separate identity and explicit permissions. |
 | `sdk` | Generated bindings, Python SDK tooling, and optional native integration SDKs (including C++) | Derives from published schemas; cannot redefine them or become the runtime. |
-| `app` | Packager, launcher, and build wrapper for already-built `server-dashboard` artifacts on target platforms | Does not own UI, screens, dashboard definitions, server API, orchestration, canonical data, or device/light transport. |
+| `app` | Packager/build wrapper for already-built `server-dashboard` artifacts and metadata consumed by an external platform launcher | Does not own UI, screens, dashboard definitions, server API, orchestration, canonical data, device/light transport, or the external launcher runtime. |
 | `get-started` | Installation and onboarding | Documents released behavior; does not define it. |
 
 The owner reviews changes to its responsibility and supplies compatibility
@@ -332,12 +335,14 @@ recorded in [ADR-0001](docs/ADR/0001-rgb-light-vertical-slice.md):
    dashboard definitions, visual components, widgets, composition, and
    independently scoped instances. It consumes the abstract server API.
 5. The built-in admin surface remains a React panel owned by `server`. `app`
-   only packages or launches an already-built `server-dashboard` artifact; it
-   is not a UI, server API, or device/light transport client.
+   only packages an already-built `server-dashboard` artifact and writes
+   metadata consumed by an external platform launcher; that launcher is outside
+   `app`, which currently contains no launcher runtime and is not a UI, server
+   API, or device/light transport client.
 
 The slice target is complete when the server admin surface and one
 `server-dashboard` instance can observe and command the real Wi-Fi light through
-the same server-linker boundary. An `app` packaging/launcher path is not a
+the same server-linker boundary. An `app` packaging/build-wrapper path is not a
 separate device or server-API path. The current documentation does not imply
 that SQLite durability, durable delivery, or the broader auth/ops roadmap is
 already part of that slice.
@@ -370,8 +375,9 @@ deliberately outside the first deployment target.
 1. Current foundation: Python server runtime, contracts, logging, registry,
    process-local in-memory execution, and the built-in React admin panel.
 2. Current vertical-slice work: server-side Linker boundary, reusable
-   React/TypeScript dashboard module, its platform packaging/launcher wrapper,
-   and the real native Tuya-compatible Linker path.
+   React/TypeScript dashboard module, its platform packaging/build-wrapper path
+   and metadata for an external platform launcher, and the real native
+   Tuya-compatible Linker path.
 3. Future server persistence: SQLite migrations, durable history, replay, and
    recovery semantics.
 4. Future reliability and operations: durable delivery, broader authentication,

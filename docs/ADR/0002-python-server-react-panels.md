@@ -34,9 +34,11 @@ owner.
   independently scoped dashboard instances, and consumes the server API.
 - The built-in server admin surface remains a separate React panel built into
   and owned by `server`.
-- `app` is only a packager, launcher, and build wrapper for already-built
-  `server-dashboard` artifacts on target platforms. It has no UI, screens,
-  dashboard definitions, server API, or device/light transport responsibility.
+- `app` is only a packager/build wrapper for already-built `server-dashboard`
+  artifacts on target platforms. It writes metadata consumed by an external
+  platform launcher; the `app` repository currently contains no launcher
+  runtime. It has no UI, screens, dashboard definitions, server API, or
+  device/light transport responsibility.
 - C++ is optional and limited to SDK/native integration. The server runtime,
   control-plane implementation, and web panels have no C++ dependency.
 - Simulator runtimes, Home Assistant runtimes or APIs, and gateway deployments
@@ -68,9 +70,10 @@ shortcut for extending the public model.
 
 The server and its web panels share a clear Python/React direction; vendor
 details stay isolated in one process; C++ integrations can be added without
-making the server depend on native toolchains. The app wrapper remains outside
-the UI, API, and device boundaries. The cost is maintaining Python Linker
-drivers and normalized mappings for each supported vendor.
+making the server depend on native toolchains. The app packaging/build-wrapper
+path remains outside the UI, API, and device boundaries. The cost is
+maintaining Python Linker drivers and normalized mappings for each supported
+vendor.
 
 The decision is evidenced by the synchronized repository map, architecture
 contract, and RGB-light vertical slice. Implementation repositories must cover
