@@ -9,19 +9,52 @@ It does not replace implementation documentation in the owning repository.
 OpenHDO is a local-first control plane with explicit process boundaries:
 
 - **Server** owns canonical state, orchestration, policy, persistence, audit,
-  the public API, and server modules.
+  the public API, server modules, and its built-in configuration/admin surface.
 - **Linker** runs close to hardware and owns transports, device discovery,
   pairing, local credentials, protocol drivers, and device events.
 - **Agent** exposes desktop and operating-system capabilities under a separate
   identity; it is not a replacement for a hardware Linker.
 - **Plugin** is an isolated extension that communicates through public,
   versioned contracts and never accesses the server database directly.
-- **Client** is a view or control surface. It does not duplicate orchestration
-  or become a second source of truth.
+- **Client** is a view or control surface that may host one or more dashboard
+  instances. It does not duplicate orchestration or become a second source of
+  truth.
 
-The first server release is a modular monolith. `server-dashboard`,
-`server-logic`, and `server-linker` are clear internal module boundaries and
-separate repositories, but they are not forced into networked microservices.
+The first server release is a modular monolith. `server-logic` and
+`server-linker` are server module boundaries; `server-dashboard` is a reusable
+client module consumed by client surfaces. These are separate repositories,
+but they are not forced into networked microservices.
+
+## Dashboard instances and server admin surface
+
+A **Dashboard instance** is one configured mount of the reusable
+`server-dashboard` client module. It is an instance, not a repository or a
+second server. Many instances may exist at once, including a main dashboard,
+an embedded wall panel, a room-specific dashboard, and a setup-specific
+dashboard. Each instance has an explicit `instance_id` and may have its own
+placement, location/user context, layout, subscriptions, and permissions.
+
+Ownership is split deliberately:
+
+- `server-dashboard` owns reusable rendering, interaction behavior, and the
+  instance-safe client contract. It must not own server policy or assume there
+  is only one dashboard.
+- The consuming client/surface owns where an instance is mounted and which
+  instance configuration it presents. Shared or persisted configuration still
+  goes through the server's versioned API when it is server state.
+- `server` owns canonical state, authorization, and any API used to create,
+  read, update, or delete instance configuration.
+
+The **server admin surface** is a separate, privileged surface built into and
+released by `server`. It manages server configuration, identities and policy,
+Linker administration, modules, and operational controls. It uses server-owned
+services and authorization directly. It is not a `server-dashboard` instance,
+does not count toward dashboard-instance multiplicity, and must not be made a
+dependency of the reusable client module.
+
+Any proposal that changes a reusable dashboard module, a dashboard instance,
+or the built-in admin surface must name which of the three it changes and keep
+their contracts and permissions separate.
 
 ## Repository ownership
 
@@ -31,8 +64,8 @@ tests, and release notes of that responsibility.
 | Repository | Canonical responsibility | Boundary rule |
 | --- | --- | --- |
 | `about` | Product vocabulary, repository map, architecture, ADR process, and cross-repo governance | Documents decisions; owns no runtime state or wire schema. |
-| `server` | Server API, Linker protocol schemas in `contracts/<major>/`, canonical state, policy, persistence, and orchestration | Publishes normative schemas and compatibility decisions. |
-| `server-dashboard` | Dashboard module and its presentation behavior | Uses server APIs; never becomes a source of truth. |
+| `server` | Server API, Linker protocol schemas in `contracts/<major>/`, canonical state, policy, persistence, orchestration, and built-in server admin surface | Publishes normative schemas and compatibility decisions; does not own reusable client-dashboard instances. |
+| `server-dashboard` | Reusable client-dashboard module, instance-safe presentation, and client-facing interaction contract | Does not own the built-in server admin surface, canonical state, or a particular dashboard instance. |
 | `server-logic` | Flows, nodes, conditions, and actions | Requests server capabilities; never writes the database directly. |
 | `server-linker` | Server-side Linker sessions, inventory, health, and routing | Implements the server side of the Linker contract. |
 | `linker` | Hardware access process, transports, discovery, pairing, and drivers | Implements device access behind the Linker contract. |
@@ -142,6 +175,8 @@ broker, abstraction layer, or asynchronous flow solely to use a pattern name.
 | Notifications and lifecycle | Observer or State | Multiple observers need updates, or a lifecycle has valid transitions | Bound subscriptions and enumerate legal state transitions. |
 | Ordered policy steps | Chain of Responsibility | Independent validators/policies may accept, reject, or pass work in order | Make order explicit and stop on authorization failure. |
 | Coarse client surface | Facade | A client needs a stable, coarse-grained operation over several services | Keep it thin; it must not become a second domain model. |
+| Reusable dashboard in many contexts | Module with explicit instance configuration; Observer + Request-Reply for live/read state | The same client-dashboard behavior is mounted as multiple main, wall-panel, room, or setup-specific instances | Scope subscriptions, layout, context, and permissions by `instance_id`; do not put server admin state in the module. |
+| Privileged server configuration UI | Service Layer + thin Facade in `server` | Configuration, identity, policy, Linker, or operational controls require server-owned authorization | Keep the admin surface built into `server`; it is not a `server-dashboard` instance and must use server-owned tests and audit. |
 
 Before selecting a pattern, answer: what responsibility varies, who owns it,
 what failure must be contained, and what test proves the choice? If those
@@ -157,7 +192,9 @@ local refactors do not need one.
 1. Copy [`docs/ADR/0000-template.md`](docs/ADR/0000-template.md) to the next
    number and write it before implementation is merged.
 2. Name the decision in imperative terms, list the owning repository and
-   affected consumers, and capture rejected alternatives and operational cost.
+   affected consumers, classify any UI boundary as a reusable dashboard
+   module, a dashboard instance, or the built-in server admin surface, and
+   capture rejected alternatives and operational cost.
 3. Link the relevant contract/schema, compatibility and migration plan,
    observability, security impact, and test evidence.
 4. Review in the owner repository and notify every affected consumer. A
@@ -175,8 +212,9 @@ repositories must coordinate.
 `server` owns the normative public and Linker schemas under
 `contracts/<major>/`. `server-linker` and `linker` implement the two sides;
 `sdk` derives bindings and tooling; clients, agents, plugins, and modules are
-consumers. `about` owns this governance and the shared vocabulary, not schema
-files.
+consumers. `server-dashboard` may be consumed by many dashboard instances but
+does not own the server admin surface. `about` owns this governance and the
+shared vocabulary, not schema files.
 
 For every contract change:
 
@@ -198,7 +236,9 @@ For every contract change:
 No repository may make a public boundary change by editing a copied schema,
 relying on undocumented fields, or treating a database table as an API. A
 contract is ready only when it is versioned, validated, observable, tested,
-authorized, and owned.
+authorized, and owned. In particular, a client-dashboard contract must not
+silently become a server-admin contract, and a dashboard instance must not
+be treated as the canonical owner of shared server state.
 
 ## Linker lifecycle
 

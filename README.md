@@ -20,8 +20,8 @@ contracts belong in the repository that owns them.
 
 | Repository | Responsibility |
 | --- | --- |
-| [server](https://github.com/OpenHDO/server) | C++ control plane, API, persistence, orchestration, CLI, and panel host |
-| [server-dashboard](https://github.com/OpenHDO/server-dashboard) | Configurable dashboard module |
+| [server](https://github.com/OpenHDO/server) | C++ control plane, API, persistence, orchestration, CLI, panel host, and built-in server admin surface |
+| [server-dashboard](https://github.com/OpenHDO/server-dashboard) | Reusable client-dashboard module for many dashboard instances |
 | [server-logic](https://github.com/OpenHDO/server-logic) | Flows, nodes, conditions, and actions |
 | [server-linker](https://github.com/OpenHDO/server-linker) | Server-side Linker sessions, inventory, health, and routing |
 | [linker](https://github.com/OpenHDO/linker) | Standalone hardware-access process near radios and devices |
@@ -39,8 +39,8 @@ repository's contract or vocabulary.
 | Repository | Owns | Does not own |
 | --- | --- | --- |
 | `about` | Product overview, system boundaries, shared vocabulary, ADR process, and cross-repo governance | Runtime code, database schema, or wire-format implementation |
-| `server` | Canonical server API and Linker protocol schemas under `contracts/<major>/`; server state, policy, persistence, orchestration, and module hosting | Device-driver code, client-specific UI, or generated SDK bindings |
-| `server-dashboard` | Dashboard module behavior and panel-facing presentation | Canonical server state or protocol schemas |
+| `server` | Canonical server API and Linker protocol schemas under `contracts/<major>/`; server state, policy, persistence, orchestration, module hosting, and the built-in server admin surface | Device-driver code, reusable client-dashboard behavior, or generated SDK bindings |
+| `server-dashboard` | Reusable client-dashboard module behavior, instance-safe presentation, and its client-facing interaction contract | The built-in server admin surface, canonical server state, or a particular dashboard instance |
 | `server-logic` | Flow, node, condition, and action behavior | Transport, device access, or direct database access |
 | `server-linker` | Server-side Linker sessions, inventory, health, and routing implementation | The standalone Linker process or device-driver implementation |
 | `linker` | Standalone hardware access, transports, discovery, pairing, and device drivers | Canonical server state or policy |
@@ -70,6 +70,22 @@ The server owns shared state and policy. A Linker owns local hardware access.
 Multiple Linkers can connect to one server, locally or across an authenticated
 network. Agents and plugins are separate extension points with explicit
 permissions.
+
+## Dashboard instances and server admin
+
+A **Dashboard instance** is one configured use of the reusable
+`server-dashboard` client module. Many instances may coexist: for example, a
+main dashboard, an embedded wall panel, a room-specific dashboard, or a
+setup-specific dashboard. The module is reusable; the instance supplies its
+own identity, placement, context, layout, and permissions through public
+contracts.
+
+The **server admin surface** is different. It is a privileged, built-in surface
+shipped and owned by `server` for server configuration, policy, identities,
+Linker administration, and operational controls. It is not a
+`server-dashboard` instance and must not be moved into the reusable client
+module. See [ARCHITECTURE.md](ARCHITECTURE.md) for the ownership and pattern
+rules.
 
 ## Protocol vocabulary
 

@@ -5,6 +5,7 @@
 - Owner repository: `<repository>`
 - Affected repositories: `<list>`
 - Related contract/schema: `<path, URL, or N/A>`
+- Surface classification: `Reusable dashboard module | Dashboard instance | Server admin surface | Other`
 
 ## Context
 
@@ -14,7 +15,17 @@ boundary, users, data, and operational conditions involved.
 ## Decision
 
 What are we standardizing? Name the smallest applicable pattern, if any, and
-state the ownership and versioning consequences.
+state the ownership and versioning consequences. If this concerns a client
+surface, say whether it is reusable module behavior, one dashboard instance,
+or the built-in server admin surface.
+
+## Ownership and multiplicity
+
+- Reusable module owner:
+- Instance host/placement owner:
+- Canonical state and authorization owner:
+- Number and scope of instances:
+- Explicitly excluded surface:
 
 ## Contract and compatibility
 
