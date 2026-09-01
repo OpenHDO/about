@@ -24,9 +24,12 @@ driver.
 - `linker` is a Python 3.11+ process. It owns physical Wi-Fi access and the
   vendor-specific RGB driver, including vendor discovery, authentication, and
   protocol translation.
-- `server-dashboard` is a reusable client-dashboard module; independently
-  scoped dashboard instances may consume the same state. `app` is another
-  client surface. Neither is an authority for device state or server admin.
+- `server-dashboard` is the sole reusable React/TypeScript dashboard module. It
+  owns dashboard definitions, visual components, widgets, composition, and
+  independently scoped dashboard instances; it consumes the same server state.
+- `app` is only a packager, launcher, and build wrapper for already-built
+  `server-dashboard` artifacts. It has no UI, screens, dashboard definitions,
+  server API, or device/light transport responsibility.
 
 The semantic minimum is a light state containing power, brightness, and RGB
 color, plus commands to change it, replies to conclude commands, and events to
@@ -41,8 +44,11 @@ contract, not in this ADR.
    Linker protocol, registers the device, tracks health, and routes commands.
 3. The Python `linker` process discovers and authenticates to the real RGB
    light over Wi-Fi, then translates its vendor protocol at the driver edge.
-4. `server-dashboard` and `app` read state and issue commands through the
-   server API. They do not connect to the light or become a source of truth.
+4. `server-dashboard` reads state and issues commands through the server API;
+   it does not connect to the light or become a source of truth. The built-in
+   admin surface remains in `server`.
+5. `app` only packages or launches an already-built `server-dashboard` artifact;
+   it is not part of the server API or device/light transport path.
 
 All commands and reported state cross the normal authenticated, validated,
 observable `server-linker` boundary. The server remains canonical when the
@@ -68,7 +74,8 @@ OpenHDO must not import a Home Assistant runtime or depend on its APIs.
 ## Consequences and evidence
 
 The slice validates the real Wi-Fi path, keeps canonical state and policy in
-the server, and keeps client surfaces independent of vendor protocol details.
-Evidence is the server, server-linker, and Python Linker contract coverage, plus
-client tests for initial state, command reply, state event, retry/deduplication,
-malformed input, device unavailability, and reconnect behavior.
+the server, and keeps the dashboard and admin surfaces independent of vendor
+protocol details. Evidence is the server, server-linker, and Python Linker
+contract coverage, plus dashboard/admin tests for initial state, command reply,
+state event, retry/deduplication, malformed input, device unavailability, and
+reconnect behavior.

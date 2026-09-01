@@ -25,34 +25,42 @@ OpenHDO is a local-first control plane with explicit process boundaries:
 - **Client** is a view or control surface that may host one or more dashboard
   instances. It does not duplicate orchestration or become a second source of
   truth.
+- **App** is only a packager, launcher, and build wrapper for already-built
+  `server-dashboard` artifacts on target platforms. It has no UI, screens,
+  dashboard definitions, server API, or device/light transport responsibility.
 
-Every web panel, including dashboard instances and the built-in server admin
-surface, is a React client of the Python server API. C++ is optional and limited
-to SDK/native integration; the server runtime and web panels have no native
-dependency.
+`server-dashboard` is the sole reusable React/TypeScript dashboard UI module. It
+owns dashboard definitions, visual components, widgets, composition, and the
+instance model for multiple independent dashboard instances. The built-in
+server admin surface remains a separate React panel built into and owned by
+`server`. C++ is optional and limited to SDK/native integration; the server
+runtime and web panels have no native dependency.
 
 The first server release is a modular monolith. `server-logic` and
-`server-linker` are server module boundaries; `server-dashboard` is a reusable
-client module consumed by client surfaces. These are separate repositories,
-but they are not forced into networked microservices.
+`server-linker` are server module boundaries; `server-dashboard` is the
+reusable dashboard UI module consumed by client surfaces. These are separate
+repositories, but they are not forced into networked microservices.
 
 ## Dashboard instances and server admin surface
 
-A **Dashboard instance** is one configured mount of the reusable
-`server-dashboard` client module. It is an instance, not a repository or a
-second server. Many instances may exist at once, including a main dashboard,
-an embedded wall panel, a room-specific dashboard, and a setup-specific
-dashboard. Each instance has an explicit `instance_id` and may have its own
-placement, location/user context, layout, subscriptions, and permissions.
+A **Dashboard instance** is one independently scoped use of the reusable
+`server-dashboard` React/TypeScript module. It is an instance, not a repository
+or a second server. `server-dashboard` owns the dashboard definitions, visual
+components, widgets, composition, and instance model for multiple independent
+instances. Each instance has an explicit `instance_id` and may have its own
+placement, location/user context, layout, subscriptions, and permissions. This
+describes the ownership contract, not implementation status for every instance.
 
 Ownership is split deliberately:
 
-- `server-dashboard` owns reusable rendering, interaction behavior, and the
-  instance-safe client contract. It must not own server policy or assume there
-  is only one dashboard.
-- The consuming client/surface owns where an instance is mounted and which
-  instance configuration it presents. Shared or persisted configuration still
-  goes through the server's versioned API when it is server state.
+- `server-dashboard` is the sole reusable dashboard UI module. It owns
+  dashboard definitions, visual components, widgets, composition, interaction
+  behavior, and the instance-safe contract for multiple independent instances.
+  It must not own server policy or assume there is only one dashboard.
+- A platform wrapper may package or launch an already-built
+  `server-dashboard` artifact, but it does not define screens, dashboards, or
+  API/device behavior. Shared or persisted configuration still goes through
+  the server's versioned API when it is server state.
 - `server` owns canonical state, authorization, and any API used to create,
   read, update, or delete instance configuration.
 
@@ -76,13 +84,13 @@ tests, and release notes of that responsibility.
 | --- | --- | --- |
 | `about` | Product vocabulary, repository map, architecture, ADR process, and cross-repo governance | Documents decisions; owns no runtime state or wire schema. |
 | `server` | Python backend/runtime/API; Linker protocol schemas in `contracts/<major>/`, canonical state, policy, persistence boundary, orchestration, and built-in React web admin surface | Publishes normative schemas and compatibility decisions; does not own reusable client-dashboard instances or vendor-specific device logic. |
-| `server-dashboard` | Reusable React web-panel module, instance-safe presentation, and client-facing interaction contract | Does not own the built-in server admin surface, canonical state, or a particular dashboard instance. |
+| `server-dashboard` | Sole reusable React/TypeScript dashboard module: dashboard definitions, visual components, widgets, composition, and instance-safe behavior for multiple independent dashboard instances | Does not own the built-in server admin surface, canonical state, or device/light transport. |
 | `server-logic` | Python flows, nodes, conditions, and actions | Requests server capabilities; never writes the database directly. |
 | `server-linker` | Python server-side Linker sessions, inventory, health, and routing | Implements the server side of the Linker contract; does not own vendor-specific device logic. |
 | `linker` | Standalone Python hardware access process, vendor-specific connections, discovery, pairing, credentials, and device logic | Implements device access behind the Linker contract; does not own canonical state or policy. |
 | `agent` | Desktop and edge OS capabilities | Uses a separate identity and explicit permissions. |
 | `sdk` | Generated bindings, Python SDK tooling, and optional native integration SDKs (including C++) | Derives from published schemas; cannot redefine them or become the runtime. |
-| `app` | React browser and specialized clients | Consumes public contracts; does not duplicate orchestration. |
+| `app` | Packager, launcher, and build wrapper for already-built `server-dashboard` artifacts on target platforms | Does not own UI, screens, dashboard definitions, server API, orchestration, canonical data, or device/light transport. |
 | `get-started` | Installation and onboarding | Documents released behavior; does not define it. |
 
 The owner reviews changes to its responsibility and supplies compatibility
@@ -227,7 +235,7 @@ broker, abstraction layer, or asynchronous flow solely to use a pattern name.
 | Notifications and lifecycle | Observer or State | Multiple observers need updates, or a lifecycle has valid transitions | Bound subscriptions and enumerate legal state transitions. |
 | Ordered policy steps | Chain of Responsibility | Independent validators/policies may accept, reject, or pass work in order | Make order explicit and stop on authorization failure. |
 | Coarse client surface | Facade | A client needs a stable, coarse-grained operation over several services | Keep it thin; it must not become a second domain model. |
-| Reusable dashboard in many contexts | Module with explicit instance configuration; Observer + Request-Reply for live/read state | The same client-dashboard behavior is mounted as multiple main, wall-panel, room, or setup-specific instances | Scope subscriptions, layout, context, and permissions by `instance_id`; do not put server admin state in the module. |
+| Reusable dashboard in many contexts | `server-dashboard` as the sole reusable React/TypeScript UI module with explicit instance configuration; Observer + Request-Reply for live/read state | The same dashboard definitions, visual components, widgets, and composition serve multiple independent instances | Scope subscriptions, layout, context, and permissions by `instance_id`; do not put server admin state in the module. |
 | Privileged server configuration UI | Service Layer + thin Facade in `server` | Configuration, identity, policy, Linker, or operational controls require server-owned authorization | Keep the admin surface built into `server`; it is not a `server-dashboard` instance and must use server-owned tests and audit. |
 
 Before selecting a pattern, answer: what responsibility varies, who owns it,
@@ -320,15 +328,19 @@ recorded in [ADR-0001](docs/ADR/0001-rgb-light-vertical-slice.md):
 3. `linker` is a Python process that owns the vendor-specific connection and
    device logic, translating the vendor protocol at the driver edge. The
    current Linker path includes a native Tuya-compatible local driver.
-4. `server-dashboard`, the built-in admin surface, and `app` are React clients.
-   They consume the abstract
-   server API and neither owns canonical device state or vendor details.
+4. `server-dashboard` is the reusable React/TypeScript dashboard UI module for
+   dashboard definitions, visual components, widgets, composition, and
+   independently scoped instances. It consumes the abstract server API.
+5. The built-in admin surface remains a React panel owned by `server`. `app`
+   only packages or launches an already-built `server-dashboard` artifact; it
+   is not a UI, server API, or device/light transport client.
 
-The slice target is complete when the server admin surface, one dashboard
-instance, and one app can observe and command the real Wi-Fi light through the
-same server-linker boundary. The current documentation does not imply that
-SQLite durability, durable delivery, or the broader auth/ops roadmap is already
-part of that slice.
+The slice target is complete when the server admin surface and one
+`server-dashboard` instance can observe and command the real Wi-Fi light through
+the same server-linker boundary. An `app` packaging/launcher path is not a
+separate device or server-API path. The current documentation does not imply
+that SQLite durability, durable delivery, or the broader auth/ops roadmap is
+already part of that slice.
 
 ## Security model
 
@@ -357,8 +369,9 @@ deliberately outside the first deployment target.
 
 1. Current foundation: Python server runtime, contracts, logging, registry,
    process-local in-memory execution, and the built-in React admin panel.
-2. Current vertical-slice work: server-side Linker boundary, reusable React
-   dashboard module, React app, and the real native Tuya-compatible Linker path.
+2. Current vertical-slice work: server-side Linker boundary, reusable
+   React/TypeScript dashboard module, its platform packaging/launcher wrapper,
+   and the real native Tuya-compatible Linker path.
 3. Future server persistence: SQLite migrations, durable history, replay, and
    recovery semantics.
 4. Future reliability and operations: durable delivery, broader authentication,

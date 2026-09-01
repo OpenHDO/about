@@ -21,13 +21,13 @@ contracts belong in the repository that owns them.
 | Repository | Responsibility |
 | --- | --- |
 | [server](https://github.com/OpenHDO/server) | Python control plane backend/runtime/API, persistence boundary, orchestration, CLI, and built-in React web admin surface |
-| [server-dashboard](https://github.com/OpenHDO/server-dashboard) | Reusable React web-panel module for many dashboard instances |
+| [server-dashboard](https://github.com/OpenHDO/server-dashboard) | The sole reusable React/TypeScript dashboard module for dashboard definitions, visual components, widgets, composition, and multiple independent dashboard instances |
 | [server-logic](https://github.com/OpenHDO/server-logic) | Python flow, node, condition, and action execution module |
 | [server-linker](https://github.com/OpenHDO/server-linker) | Python server-side Linker sessions, inventory, health, and routing |
 | [linker](https://github.com/OpenHDO/linker) | Standalone Python Linker with vendor-specific connections and device logic |
 | [agent](https://github.com/OpenHDO/agent) | Desktop and edge operating-system capabilities |
 | [sdk](https://github.com/OpenHDO/sdk) | Generated bindings, Python SDK tooling, and optional C++/native integration SDKs |
-| [app](https://github.com/OpenHDO/app) | React browser and specialized client applications |
+| [app](https://github.com/OpenHDO/app) | Packager, launcher, and build wrapper for already-built `server-dashboard` artifacts on target platforms; not a UI or server API client |
 | [get-started](https://github.com/OpenHDO/get-started) | Installation, first run, and contributor onboarding |
 
 ## Ownership and authority
@@ -40,13 +40,13 @@ repository's contract or vocabulary.
 | --- | --- | --- |
 | `about` | Product overview, system boundaries, shared vocabulary, ADR process, and cross-repo governance | Runtime code, database schema, or wire-format implementation |
 | `server` | Python backend/runtime/API; canonical server API and Linker protocol schemas under `contracts/<major>/`; server state, policy, persistence boundary, orchestration, module hosting, and the built-in React web admin surface | Device-driver code, reusable client-dashboard behavior, or generated SDK bindings |
-| `server-dashboard` | Reusable React web-panel module behavior, instance-safe presentation, and its client-facing interaction contract | The built-in server admin surface, canonical server state, or a particular dashboard instance |
+| `server-dashboard` | The sole reusable React/TypeScript dashboard module: dashboard definitions, visual components, widgets, composition, and instance-safe behavior for multiple independent dashboard instances | The built-in server admin surface, canonical server state, or device/light transport |
 | `server-logic` | Python flow, node, condition, and action behavior | Transport, device access, or direct database access |
 | `server-linker` | Python server-side Linker sessions, inventory, health, and routing implementation | The standalone Linker process or vendor-specific device logic |
 | `linker` | Standalone Python hardware access, vendor-specific connections, discovery, pairing, credentials, and device logic | Canonical server state or policy |
 | `agent` | Desktop and edge operating-system capabilities and their permissions | Hardware ownership or server persistence |
 | `sdk` | Generated language bindings, Python SDK tooling, optional C++/native integration SDKs, and compatibility helpers derived from published contracts | The normative wire schemas or the server runtime |
-| `app` | React browser and specialized client applications | Server orchestration or canonical data |
+| `app` | Packaging, platform launching, and build-wrapper behavior for already-built `server-dashboard` artifacts | UI, screens, dashboard definitions, reusable dashboard components/widgets/composition, server API, server orchestration, canonical data, or device/light transport |
 | `get-started` | Installation, first-run, and contributor onboarding | Product or protocol authority |
 
 When ownership is unclear, [ARCHITECTURE.md](ARCHITECTURE.md) is the starting
@@ -56,7 +56,7 @@ changes.
 ## System shape
 
 ```text
-server-dashboard / app / panel / CLI
+server-dashboard / panel / CLI
                  │ public server API
                  ▼
            openhdo-server ─── Python backend/runtime/API, abstract Light model
@@ -68,6 +68,9 @@ server-dashboard / app / panel / CLI
                  ▼
        Python openhdo-linker ─── vendor-specific Wi-Fi driver ─── RGB light
 ```
+
+`app` is outside this API path: it only packages, launches, or wraps an
+already-built `server-dashboard` artifact for a target platform.
 
 The server owns shared state and policy. Its public contracts expose an abstract,
 vendor-neutral Light model (including normalized power, brightness, color, and
@@ -90,9 +93,13 @@ The first end-to-end path uses one real vendor-specific RGB light over Wi-Fi:
 - `linker` is a Python process that owns the vendor-specific connection and
   device logic for the real light. Its current path includes the native,
   Tuya-compatible local driver.
-- `server-dashboard`, the built-in admin surface, and any other web panels are
-  React clients of the server API; neither web panels nor `app` owns canonical
-  state or vendor details.
+- `server-dashboard` is the reusable React/TypeScript dashboard module for
+  dashboard definitions, visual components, widgets, composition, and
+  independently scoped dashboard instances. The built-in admin surface is a
+  separate React panel owned by `server`.
+- `app` only packages or launches already-built `server-dashboard` artifacts;
+  it has no UI, screens, dashboard definitions, server API, or device/light
+  transport responsibility.
 
 The complete path is recorded in [ADR-0001](docs/ADR/0001-rgb-light-vertical-slice.md).
 
@@ -115,12 +122,12 @@ Assistant runtime.
 
 ## Dashboard instances and server admin
 
-A **Dashboard instance** is one configured use of the reusable
-`server-dashboard` client module. Many instances may coexist: for example, a
-main dashboard, an embedded wall panel, a room-specific dashboard, or a
-setup-specific dashboard. The module is reusable; the instance supplies its
-own identity, placement, context, layout, and permissions through public
-contracts.
+A **Dashboard instance** is one independently scoped use of the reusable
+`server-dashboard` React/TypeScript module. That module owns the dashboard
+definitions, visual components, widgets, composition, and instance model for
+multiple instances. An instance may have its own identity, placement, context,
+layout, and permissions through public contracts. This is an ownership boundary,
+not a claim that every planned instance is already implemented.
 
 The **server admin surface** is different. It is a privileged, built-in React
 web panel shipped and owned by `server` for server configuration, policy,
@@ -169,7 +176,8 @@ include `OpenHDO` where the word could be confused with a compiler linker.
 - SQLite as the future first single-node persistence backend;
 - HTTP and WebSocket for client and live-update APIs;
 - JSON Schema and versioned language-neutral messages at process boundaries;
-- React + TypeScript + Tailwind + shadcn-style primitives for every web panel;
+- React + TypeScript + Tailwind + shadcn-style primitives for
+  `server-dashboard` and the built-in server admin panel;
 - C++ is limited to optional SDK/native integration; the server runtime and web
   panels have no native dependency.
 

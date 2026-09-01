@@ -29,9 +29,14 @@ owner.
 - The Python `linker` owns vendor-specific connections and device logic,
   including discovery, pairing, credentials, protocol drivers, and translation
   to and from the abstract Light model.
-- Every web panel is React, including `server-dashboard` instances and the
-  built-in server admin surface. Web panels consume the server API and do not
-  connect to devices directly.
+- `server-dashboard` is the sole reusable React/TypeScript dashboard module. It
+  owns dashboard definitions, visual components, widgets, composition, and
+  independently scoped dashboard instances, and consumes the server API.
+- The built-in server admin surface remains a separate React panel built into
+  and owned by `server`.
+- `app` is only a packager, launcher, and build wrapper for already-built
+  `server-dashboard` artifacts on target platforms. It has no UI, screens,
+  dashboard definitions, server API, or device/light transport responsibility.
 - C++ is optional and limited to SDK/native integration. The server runtime,
   control-plane implementation, and web panels have no C++ dependency.
 - Simulator runtimes, Home Assistant runtimes or APIs, and gateway deployments
@@ -61,16 +66,17 @@ shortcut for extending the public model.
 
 ## Consequences and evidence
 
-The server and all web panels share a clear Python/React direction; vendor
+The server and its web panels share a clear Python/React direction; vendor
 details stay isolated in one process; C++ integrations can be added without
-making the server depend on native toolchains. The cost is maintaining Python
-Linker drivers and normalized mappings for each supported vendor.
+making the server depend on native toolchains. The app wrapper remains outside
+the UI, API, and device boundaries. The cost is maintaining Python Linker
+drivers and normalized mappings for each supported vendor.
 
 The decision is evidenced by the synchronized repository map, architecture
 contract, and RGB-light vertical slice. Implementation repositories must cover
-the abstract Light contract, Linker translation, React API usage, malformed
-input, device unavailability, and reconnect behavior with provider and
-consumer contract tests.
+the abstract Light contract, Linker translation, `server-dashboard` API usage,
+malformed input, device unavailability, and reconnect behavior with provider
+and consumer contract tests.
 
 ## Review and lifecycle
 
